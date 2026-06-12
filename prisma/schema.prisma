@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  VOID
+}
+
+enum BetPick {
+  HOME
+  DRAW
+  AWAY
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  REFUNDED
+}
+
+enum LedgerType {
+  INITIAL_GRANT
+  BET_STAKE
+  BET_PAYOUT
+  BET_REFUND
+  ADMIN_ADJUSTMENT
+}
+
+model User {
+  id           String        @id @default(cuid())
+  username     String        @unique
+  passwordHash String
+  role         UserRole      @default(USER)
+  balance      BigInt        @default(1000000)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     Session[]
+  bets         Bet[]
+  ledger       LedgerEntry[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Match {
+  id          String      @id @default(cuid())
+  matchNumber Int         @unique
+  stage       String
+  groupName   String?
+  homeTeam    String
+  awayTeam    String
+  startsAt    DateTime
+  venue       String
+  status      MatchStatus @default(SCHEDULED)
+  homeScore   Int?
+  awayScore   Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  odds        Odds?
+  bets        Bet[]
+
+  @@index([startsAt])
+  @@index([status])
+}
+
+model Odds {
+  id        String   @id @default(cuid())
+  matchId   String   @unique
+  home      Decimal  @db.Decimal(8, 2)
+  draw      Decimal  @db.Decimal(8, 2)
+  away      Decimal  @db.Decimal(8, 2)
+  lockedAt  DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+model Bet {
+  id        String    @id @default(cuid())
+  userId    String
+  matchId   String
+  pick      BetPick
+  stake     BigInt
+  oddsAtBet Decimal   @db.Decimal(8, 2)
+  status    BetStatus @default(PENDING)
+  payout    BigInt?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  ledger    LedgerEntry[]
+
+  @@index([userId])
+  @@index([matchId])
+  @@index([status])
+}
+
+model LedgerEntry {
+  id        String     @id @default(cuid())
+  userId    String
+  betId     String?
+  type      LedgerType
+  amount    BigInt
+  balance   BigInt
+  note      String?
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bet       Bet?       @relation(fields: [betId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([betId])
+  @@index([createdAt])
+}
