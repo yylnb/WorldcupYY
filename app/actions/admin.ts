@@ -31,8 +31,17 @@ const scoreSchema = z.object({
   awayScore: z.coerce.number().int().min(0)
 });
 
+function adminRedirectPath(formData: FormData) {
+  const status = formData.get("adminStatus");
+  if (status === "SCHEDULED" || status === "LIVE" || status === "FINISHED") {
+    return `/admin?status=${status}`;
+  }
+  return "/admin";
+}
+
 export async function updateMatchDetailsAction(formData: FormData) {
   await requireAdmin();
+  const redirectPath = adminRedirectPath(formData);
   const parsed = matchDetailsSchema.safeParse({
     matchId: formData.get("matchId"),
     stage: formData.get("stage"),
@@ -42,7 +51,7 @@ export async function updateMatchDetailsAction(formData: FormData) {
     startsAt: formData.get("startsAt")
   });
 
-  if (!parsed.success) redirectWithToast("/admin", "error", "比赛信息无效");
+  if (!parsed.success) redirectWithToast(redirectPath, "error", "比赛信息无效");
 
   await prisma.match.update({
     where: { id: parsed.data.matchId },
@@ -57,22 +66,23 @@ export async function updateMatchDetailsAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/admin");
-  redirectWithToast("/admin", "ok", "比赛信息已更新");
+  redirectWithToast(redirectPath, "ok", "比赛信息已更新");
 }
 
 export async function lockOddsAction(formData: FormData) {
   await requireAdmin();
+  const redirectPath = adminRedirectPath(formData);
   const parsed = oddsSchema.safeParse({
     matchId: formData.get("matchId"),
     home: formData.get("home"),
     draw: formData.get("draw"),
     away: formData.get("away")
   });
-  if (!parsed.success) redirectWithToast("/admin", "error", "赔率必须是正数");
+  if (!parsed.success) redirectWithToast(redirectPath, "error", "赔率必须是正数");
 
   const match = await prisma.match.findUnique({ where: { id: parsed.data.matchId } });
-  if (!match) redirectWithToast("/admin", "error", "比赛不存在");
-  if (match.startsAt <= new Date()) redirectWithToast("/admin", "error", "比赛开始后不能修改赔率");
+  if (!match) redirectWithToast(redirectPath, "error", "比赛不存在");
+  if (match.startsAt <= new Date()) redirectWithToast(redirectPath, "error", "比赛开始后不能修改赔率");
 
   await prisma.odds.upsert({
     where: { matchId: parsed.data.matchId },
@@ -93,39 +103,41 @@ export async function lockOddsAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/admin");
-  redirectWithToast("/admin", "ok", "赔率已锁定");
+  redirectWithToast(redirectPath, "ok", "赔率已锁定");
 }
 
 export async function settleMatchAction(formData: FormData) {
   await requireAdmin();
+  const redirectPath = adminRedirectPath(formData);
   const parsed = scoreSchema.safeParse({
     matchId: formData.get("matchId"),
     homeScore: formData.get("homeScore"),
     awayScore: formData.get("awayScore")
   });
-  if (!parsed.success) redirectWithToast("/admin", "error", "比分无效");
+  if (!parsed.success) redirectWithToast(redirectPath, "error", "比分无效");
 
   try {
     await settleMatch(parsed.data.matchId, parsed.data.homeScore, parsed.data.awayScore);
   } catch (error) {
-    redirectWithToast("/admin", "error", error instanceof Error ? error.message : "结算失败");
+    redirectWithToast(redirectPath, "error", error instanceof Error ? error.message : "结算失败");
   }
 
   revalidatePath("/");
   revalidatePath("/admin");
   revalidatePath("/bets");
   revalidatePath("/leaderboard");
-  redirectWithToast("/admin", "ok", "比赛已结算");
+  redirectWithToast(redirectPath, "ok", "比赛已结算");
 }
 
 export async function voidMatchAction(formData: FormData) {
   await requireAdmin();
+  const redirectPath = adminRedirectPath(formData);
   const matchId = String(formData.get("matchId") ?? "");
-  if (!matchId) redirectWithToast("/admin", "error", "比赛不存在");
+  if (!matchId) redirectWithToast(redirectPath, "error", "比赛不存在");
 
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match || match.status === MatchStatus.FINISHED) {
-    redirectWithToast("/admin", "error", "已结算的比赛不能直接作废");
+    redirectWithToast(redirectPath, "error", "已结算的比赛不能直接作废");
   }
 
   await voidMatch(matchId);
@@ -134,5 +146,5 @@ export async function voidMatchAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/bets");
   revalidatePath("/leaderboard");
-  redirectWithToast("/admin", "ok", "比赛已作废并退款");
+  redirectWithToast(redirectPath, "ok", "比赛已作废并退款");
 }

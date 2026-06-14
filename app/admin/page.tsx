@@ -1,9 +1,11 @@
+import { MatchStatus, type Prisma } from "@prisma/client";
 import {
   lockOddsAction,
   settleMatchAction,
   updateMatchDetailsAction,
   voidMatchAction
 } from "@/app/actions/admin";
+import Link from "next/link";
 import { SubmitButton } from "@/app/ui/SubmitButton";
 import { Toast } from "@/app/ui/Toast";
 import { requireAdmin } from "@/lib/auth";
@@ -15,12 +17,34 @@ type PageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const ADMIN_STATUS_FILTERS = [
+  { label: "全部", value: "ALL", href: "/admin" },
+  { label: "未开始", value: "SCHEDULED", href: "/admin?status=SCHEDULED" },
+  { label: "进行中", value: "LIVE", href: "/admin?status=LIVE" },
+  { label: "已结束", value: "FINISHED", href: "/admin?status=FINISHED" }
+] as const;
+
+type AdminStatusFilter = (typeof ADMIN_STATUS_FILTERS)[number]["value"];
+
+function adminStatusFilter(value: string | string[] | undefined): AdminStatusFilter {
+  const status = Array.isArray(value) ? value[0] : value;
+  return status === "SCHEDULED" || status === "LIVE" || status === "FINISHED" ? status : "ALL";
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage({ searchParams }: PageProps) {
   await requireAdmin();
   const params = (await searchParams) ?? {};
+  const selectedStatus = adminStatusFilter(params.status);
+  const where: Prisma.MatchWhereInput =
+    selectedStatus === "ALL"
+      ? {}
+      : selectedStatus === "FINISHED"
+        ? { status: { in: [MatchStatus.FINISHED, MatchStatus.VOID] } }
+        : { status: selectedStatus };
   const matches = await prisma.match.findMany({
+    where,
     include: { odds: true },
     orderBy: [{ startsAt: "asc" }, { matchNumber: "asc" }]
   });
@@ -34,6 +58,17 @@ export default async function AdminPage({ searchParams }: PageProps) {
         </div>
       </div>
       <Toast ok={params.ok} error={params.error} />
+      <section className="filter-bar" aria-label="比赛状态筛选">
+        {ADMIN_STATUS_FILTERS.map((filter) => (
+          <Link
+            className={`filter-chip${selectedStatus === filter.value ? " filter-chip-active" : ""}`}
+            href={filter.href}
+            key={filter.value}
+          >
+            {filter.label}
+          </Link>
+        ))}
+      </section>
       <section className="table-panel">
         {matches.map((match) => (
           <article className="admin-match" key={match.id}>
@@ -47,6 +82,7 @@ export default async function AdminPage({ searchParams }: PageProps) {
               </p>
               <form action={updateMatchDetailsAction} className="admin-form">
                 <input type="hidden" name="matchId" value={match.id} />
+                <input type="hidden" name="adminStatus" value={selectedStatus} />
                 <div className="form-row">
                   <input name="stage" defaultValue={match.stage} placeholder="阶段" />
                   <input name="groupName" defaultValue={match.groupName ?? ""} placeholder="小组，可空" />
@@ -63,6 +99,7 @@ export default async function AdminPage({ searchParams }: PageProps) {
             </div>
             <form action={lockOddsAction} className="admin-form">
               <input type="hidden" name="matchId" value={match.id} />
+              <input type="hidden" name="adminStatus" value={selectedStatus} />
               <h3>赔率</h3>
               <input
                 min="1.01"
@@ -90,6 +127,7 @@ export default async function AdminPage({ searchParams }: PageProps) {
             <div className="admin-form">
               <form action={settleMatchAction} className="admin-form">
                 <input type="hidden" name="matchId" value={match.id} />
+                <input type="hidden" name="adminStatus" value={selectedStatus} />
                 <h3>赛果</h3>
                 <input min="0" name="homeScore" placeholder="主队 90 分钟进球" type="number" />
                 <input min="0" name="awayScore" placeholder="客队 90 分钟进球" type="number" />
@@ -97,6 +135,7 @@ export default async function AdminPage({ searchParams }: PageProps) {
               </form>
               <form action={voidMatchAction}>
                 <input type="hidden" name="matchId" value={match.id} />
+                <input type="hidden" name="adminStatus" value={selectedStatus} />
                 <SubmitButton className="danger-button" pendingText="退款中...">
                   作废并退款
                 </SubmitButton>
@@ -104,6 +143,7 @@ export default async function AdminPage({ searchParams }: PageProps) {
             </div>
           </article>
         ))}
+        {matches.length === 0 ? <div className="empty-state">当前筛选下没有比赛。</div> : null}
       </section>
     </>
   );

@@ -1,4 +1,4 @@
-import { BetPick } from "@prisma/client";
+import { BetPick, MatchStatus } from "@prisma/client";
 import { placeBetAction } from "@/app/actions/bets";
 import { SubmitButton } from "@/app/ui/SubmitButton";
 import { Toast } from "@/app/ui/Toast";
@@ -17,10 +17,18 @@ export default async function HomePage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const user = await getCurrentUser().catch(() => null);
   const matches = await prisma.match.findMany({
+    where: {
+      status: {
+        notIn: [MatchStatus.FINISHED, MatchStatus.VOID]
+      }
+    },
     include: { odds: true },
     orderBy: [{ startsAt: "asc" }, { matchNumber: "asc" }]
   });
   const now = new Date();
+  const highlightedMatchId = matches.find(
+    (match) => match.odds && match.status === MatchStatus.SCHEDULED && match.startsAt > now
+  )?.id;
 
   return (
     <>
@@ -33,9 +41,14 @@ export default async function HomePage({ searchParams }: PageProps) {
       <Toast ok={params.ok} error={params.error} />
       <section className="grid">
         {matches.map((match) => {
-          const canBet = Boolean(user && match.odds && match.status === "SCHEDULED" && match.startsAt > now);
+          const isOpenForBet = Boolean(
+            match.odds && match.status === MatchStatus.SCHEDULED && match.startsAt > now
+          );
+          const canBet = Boolean(user && isOpenForBet);
+          const isHighlighted = match.id === highlightedMatchId;
           return (
-            <article className="card" key={match.id}>
+            <article className={`card${isHighlighted ? " card-highlight" : ""}`} key={match.id}>
+              {isHighlighted ? <span className="highlight-badge">下一场可下注</span> : null}
               <div className="match-meta">
                 <span>
                   #{match.matchNumber} · {match.stage}
@@ -77,6 +90,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             </article>
           );
         })}
+        {matches.length === 0 ? <div className="empty-state">暂无可展示的比赛，请到历史比赛查看记录。</div> : null}
       </section>
     </>
   );

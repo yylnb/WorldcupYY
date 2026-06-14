@@ -26,6 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <nav className="nav">
             <Link href="/">比赛</Link>
             <Link href="/bets">我的下注</Link>
+            <Link href="/history">历史比赛</Link>
             <Link href="/leaderboard">排行榜</Link>
             {user?.role === "ADMIN" ? <Link href="/admin">管理后台</Link> : null}
           </nav>
