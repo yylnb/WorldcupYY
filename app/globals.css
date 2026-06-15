@@ -243,6 +243,19 @@ button span {
   color: var(--danger);
 }
 
+.home-note {
+  margin: -6px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(13, 107, 87, 0.24);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--accent-strong);
+  font-weight: 700;
+  box-shadow: 0 10px 26px rgba(21, 48, 39, 0.08);
+  backdrop-filter: var(--glass);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

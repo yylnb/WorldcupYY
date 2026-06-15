@@ -38,6 +38,10 @@ export default async function HomePage({ searchParams }: PageProps) {
           <p>赛前下注，按 90 分钟含补时结果结算。</p>
         </div>
       </div>
+      <div className="home-note">
+        说明：每张比赛卡片左边球队是主队，右边球队是客队；主胜=左边主队赢，客胜=右边客队赢，平局=90
+        分钟含补时打平。
+      </div>
       <Toast ok={params.ok} error={params.error} />
       <section className="grid">
         {matches.map((match) => {
